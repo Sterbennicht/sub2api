@@ -1,0 +1,51 @@
+name: deploy-build
+
+on:
+  push:
+    branches: [deploy/prewarm]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm run build
+        working-directory: frontend
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+      - name: Build linux/amd64
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go build -tags=embed \
+            -ldflags "-s -w -X main.Commit=$(git rev-parse --short HEAD)-prewarm -X main.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.BuildType=release" \
+            -o ../sub2api ./cmd/server
+      - name: Package
+        run: |
+          tar czf sub2api_linux_amd64.tar.gz sub2api
+          sha256sum sub2api sub2api_linux_amd64.tar.gz | tee SHA256SUMS
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="deploy-prewarm-$(git rev-parse --short HEAD)"
+          gh release create "$TAG" sub2api_linux_amd64.tar.gz SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "$TAG" --notes "v0.2.9 + http_bridge prewarm fix (Wei-Shaw/sub2api#7668). Private deploy build."
