@@ -642,9 +642,13 @@ func TestOpenAIWSHTTPBridgeAnswersCodexPrewarmLocally(t *testing.T) {
 		Concurrency: 1, Status: StatusActive, Schedulable: true,
 	}
 	// 预热轮不调 BeforeTurn（不重新占槽），但要调 AfterTurn 释放握手时占的槽。
-	var beforeTurns []int
+	var beforeRequests, beforeTurns []int
 	var afterTurns []string
 	hooks := &OpenAIWSIngressHooks{
+		BeforeRequest: func(turn int, payload []byte, originalModel string) error {
+			beforeRequests = append(beforeRequests, turn)
+			return nil
+		},
 		BeforeTurn: func(turn int) error {
 			beforeTurns = append(beforeTurns, turn)
 			return nil
@@ -742,18 +746,21 @@ func TestOpenAIWSHTTPBridgeAnswersCodexPrewarmLocally(t *testing.T) {
 	require.Equal(t, "hello", secondInput[0].Get("content").String())
 	require.Equal(t, "warm", secondInput[1].Get("content").String())
 	require.Equal(t, "go", secondInput[2].Get("content").String())
+	require.Equal(t, []int{2, 3, 4}, beforeRequests)
 	require.Equal(t, []int{2, 4}, beforeTurns)
 	require.Equal(t, []string{"1:false:<nil>", "2:true:<nil>", "3:false:<nil>", "4:true:<nil>"}, afterTurns)
 }
 
-func TestOpenAIWSHTTPBridgeFirstRequestAfterPrewarmKeepsFirstTurnFailover(t *testing.T) {
+// startOpenAIWSHTTPBridgePrewarmTestSession 起一条走 HTTP bridge 的 WS 会话，
+// 返回客户端写/读函数和 ProxyResponsesWebSocketFromClient 的返回值通道。
+func startOpenAIWSHTTPBridgePrewarmTestSession(
+	t *testing.T,
+	upstream *httpUpstreamRecorder,
+	hooks *OpenAIWSIngressHooks,
+) (write func(string), read func() []byte, errCh <-chan error) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	upstream := &httpUpstreamRecorder{resp: &http.Response{
-		StatusCode: http.StatusInternalServerError,
-		Header:     make(http.Header),
-		Body:       io.NopCloser(strings.NewReader(`{"error":{"type":"server_error","message":"temporary upstream failure"}}`)),
-	}}
 	cfg := &config.Config{}
 	cfg.Security.URLAllowlist.Enabled = false
 	cfg.Security.URLAllowlist.AllowInsecureHTTP = true
@@ -770,16 +777,16 @@ func TestOpenAIWSHTTPBridgeFirstRequestAfterPrewarmKeepsFirstTurnFailover(t *tes
 		openaiWSResolver: NewOpenAIWSProtocolResolver(cfg), toolCorrector: NewCodexToolCorrector(),
 	}
 	account := &Account{
-		ID: 9005, Name: "oauth-prewarm-failover", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+		ID: 9005, Name: "oauth-prewarm-session", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 		Credentials: map[string]any{"access_token": "test-token"}, Extra: map[string]any{"responses_websockets_v2_enabled": true},
 		Concurrency: 1, Status: StatusActive, Schedulable: true,
 	}
 
-	errCh := make(chan error, 1)
+	proxyErrCh := make(chan error, 1)
 	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := coderws.Accept(w, r, nil)
 		if err != nil {
-			errCh <- err
+			proxyErrCh <- err
 			return
 		}
 		defer func() { _ = conn.CloseNow() }()
@@ -787,46 +794,61 @@ func TestOpenAIWSHTTPBridgeFirstRequestAfterPrewarmKeepsFirstTurnFailover(t *tes
 		_, firstMessage, err := conn.Read(readCtx)
 		cancelRead()
 		if err != nil {
-			errCh <- err
+			proxyErrCh <- err
 			return
 		}
 		rec := httptest.NewRecorder()
 		ginCtx, _ := gin.CreateTestContext(rec)
 		ginCtx.Request = r.Clone(r.Context())
-		errCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "test-token", firstMessage, nil)
+		proxyErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "test-token", firstMessage, hooks)
 	}))
-	defer wsServer.Close()
+	t.Cleanup(wsServer.Close)
 
 	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
 	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
 	cancelDial()
 	require.NoError(t, err)
-	defer func() { _ = clientConn.CloseNow() }()
+	t.Cleanup(func() { _ = clientConn.CloseNow() })
 
-	write := func(payload string) {
+	write = func(payload string) {
 		writeCtx, cancelWrite := context.WithTimeout(context.Background(), 3*time.Second)
 		require.NoError(t, clientConn.Write(writeCtx, coderws.MessageText, []byte(payload)))
 		cancelWrite()
 	}
-	read := func() []byte {
+	read = func() []byte {
 		readCtx, cancelRead := context.WithTimeout(context.Background(), 3*time.Second)
 		_, event, readErr := clientConn.Read(readCtx)
 		cancelRead()
 		require.NoError(t, readErr)
 		return event
 	}
+	return write, read, proxyErrCh
+}
+
+func waitOpenAIWSHTTPBridgeProxyErr(t *testing.T, errCh <-chan error) error {
+	t.Helper()
+	select {
+	case proxyErr := <-errCh:
+		return proxyErr
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for websocket bridge proxy to finish")
+		return nil
+	}
+}
+
+func TestOpenAIWSHTTPBridgeFirstRequestAfterPrewarmKeepsFirstTurnFailover(t *testing.T) {
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"type":"server_error","message":"temporary upstream failure"}}`)),
+	}}
+	write, read, errCh := startOpenAIWSHTTPBridgePrewarmTestSession(t, upstream, nil)
 
 	write(`{"type":"response.create","model":"gpt-5.1","instructions":"sys","generate":false,"input":[]}`)
 	require.Equal(t, "response.created", gjson.GetBytes(read(), "type").String())
 	prewarmID := gjson.GetBytes(read(), "response.id").String()
 	write(`{"type":"response.create","model":"gpt-5.1","instructions":"sys","previous_response_id":"` + prewarmID + `","input":[{"role":"user","content":"hello"}]}`)
-
-	var proxyErr error
-	select {
-	case proxyErr = <-errCh:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for websocket bridge proxy to finish")
-	}
+	proxyErr := waitOpenAIWSHTTPBridgeProxyErr(t, errCh)
 
 	// 预热后的首个真实请求遇到 5xx 仍要换号，且只能按当前轮重放，不能重放预热首帧。
 	var failoverErr *UpstreamFailoverError
@@ -839,6 +861,36 @@ func TestOpenAIWSHTTPBridgeFirstRequestAfterPrewarmKeepsFirstTurnFailover(t *tes
 	retryInput := gjson.GetBytes(retryPayload, "input").Array()
 	require.Len(t, retryInput, 1)
 	require.Equal(t, "hello", retryInput[0].Get("content").String())
+	require.Len(t, upstream.bodies, 1)
+}
+
+func TestOpenAIWSHTTPBridgeLatePrewarmRunsBeforeRequest(t *testing.T) {
+	upstream := &httpUpstreamRecorder{responses: []*http.Response{
+		{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-5.1\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n",
+		))},
+	}}
+	rejectErr := errors.New("blocked by admission")
+	var beforeRequests []int
+	hooks := &OpenAIWSIngressHooks{
+		BeforeRequest: func(turn int, payload []byte, originalModel string) error {
+			beforeRequests = append(beforeRequests, turn)
+			if strings.Contains(string(payload), "forbidden") {
+				return rejectErr
+			}
+			return nil
+		},
+	}
+	write, read, errCh := startOpenAIWSHTTPBridgePrewarmTestSession(t, upstream, hooks)
+
+	write(`{"type":"response.create","model":"gpt-5.1","instructions":"sys","input":[{"role":"user","content":"hello"}]}`)
+	require.Equal(t, "response.completed", gjson.GetBytes(read(), "type").String())
+	// 后续轮的预热同样要过准入/内容审计，否则其 input 会绕过审计被并入下一轮上游请求。
+	write(`{"type":"response.create","model":"gpt-5.1","instructions":"sys","generate":false,"previous_response_id":"resp_1","input":[{"role":"user","content":"forbidden"}]}`)
+	proxyErr := waitOpenAIWSHTTPBridgeProxyErr(t, errCh)
+
+	require.ErrorIs(t, proxyErr, rejectErr)
+	require.Equal(t, []int{2}, beforeRequests)
 	require.Len(t, upstream.bodies, 1)
 }
 
