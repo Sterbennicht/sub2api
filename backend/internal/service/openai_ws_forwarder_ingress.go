@@ -612,6 +612,13 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if isOpenAIWSHTTPBridgePrewarmPayload(currentBridgePayload.payloadRaw) {
 				// 预热不发上游、不记用量，只在本地应答，并把预热携带的 input 记入
 				// replay 历史，供下一轮 previous_response_id 续接。
+				// 预热 input 会随下一轮发往上游，入历史前须和普通后续轮一样过准入/内容审计
+				// （首帧已在握手时检查）。
+				if turn > 1 && hooks != nil && hooks.BeforeRequest != nil {
+					if err := hooks.BeforeRequest(turn, currentBridgePayload.payloadRaw, currentBridgePayload.originalModel); err != nil {
+						return err
+					}
+				}
 				prewarmItems, prewarmItemsExist, extractErr := openAIWSExtractNormalizedInputSequence(
 					currentBridgePayload.payloadRaw,
 				)
