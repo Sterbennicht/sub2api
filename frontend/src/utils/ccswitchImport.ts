@@ -1,6 +1,6 @@
 import type { GroupPlatform } from '@/types'
 
-export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-5.5'
+export const OPENAI_CC_SWITCH_CODEX_MODEL = 'gpt-6.1-sol'
 export const GROK_CC_SWITCH_MODEL = 'grok-4.5'
 
 export type CcSwitchClientType = 'claude' | 'gemini'
@@ -65,6 +65,9 @@ export function resolveCcSwitchImportConfig(
         app: clientType === 'gemini' ? 'gemini' : 'claude',
         endpoint: `${baseUrl.replace(/\/+$/, '')}/antigravity`
       }
+    // Composite groups here front Codex: Claude/Gemini models are reached through
+    // the group's Responses conversion, so the import targets Codex as well.
+    case 'composite':
     case 'openai':
       return {
         app: 'codex',

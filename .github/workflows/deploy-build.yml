@@ -4,6 +4,7 @@ name: deploy-build
 # plus our fixes that upstream has not merged yet:
 #   - Wei-Shaw/sub2api#7668  http_bridge answers Codex prewarm locally
 #   - fix/ws-http-bridge-replay-output  http_bridge replays assistant output
+#   - CC Switch import defaults Codex to gpt-6.1-sol (deploy-only, not for upstream)
 # To move to a new upstream release: rebase deploy/main onto the release's
 # "sync VERSION" commit, drop the fixes that were merged upstream, force-push.
 
