@@ -8,6 +8,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -41,6 +42,15 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+
+	// Endpoint addresses are only shown to logged-in users (the route runs
+	// the optional JWT middleware, so anonymous callers have no subject).
+	if _, authed := middleware.GetAuthSubjectFromContext(c); !authed {
+		anonymous := *settings
+		anonymous.APIBaseURL = ""
+		anonymous.CustomEndpoints = ""
+		settings = &anonymous
 	}
 
 	response.Success(c, dto.PublicSettings{
