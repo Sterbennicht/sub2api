@@ -653,6 +653,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		return nil, err
 	}
 
+	// The injected HTML is served to anonymous visitors too, so the endpoint
+	// addresses (api_base_url, custom_endpoints) are left out here; logged-in
+	// pages fetch them from the API.
 	return &PublicSettingsInjectionPayload{
 		RegistrationEnabled:                 settings.RegistrationEnabled,
 		EmailVerifyEnabled:                  settings.EmailVerifyEnabled,
@@ -680,7 +683,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SiteName:                            settings.SiteName,
 		SiteLogo:                            settings.SiteLogo,
 		SiteSubtitle:                        settings.SiteSubtitle,
-		APIBaseURL:                          settings.APIBaseURL,
+		APIBaseURL:                          "",
 		ContactInfo:                         settings.ContactInfo,
 		DocURL:                              settings.DocURL,
 		HomeContent:                         settings.HomeContent,
@@ -691,7 +694,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		TableDefaultPageSize:                settings.TableDefaultPageSize,
 		TablePageSizeOptions:                settings.TablePageSizeOptions,
 		CustomMenuItems:                     filterUserVisibleMenuItems(settings.CustomMenuItems),
-		CustomEndpoints:                     safeRawJSONArray(settings.CustomEndpoints),
+		CustomEndpoints:                     safeRawJSONArray(""),
 		LinuxDoOAuthEnabled:                 settings.LinuxDoOAuthEnabled,
 		DingTalkOAuthEnabled:                settings.DingTalkOAuthEnabled,
 		WeChatOAuthEnabled:                  settings.WeChatOAuthEnabled,

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -154,4 +155,49 @@ func TestSettingHandler_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *
 	require.True(t, resp.Data.WeChatOAuthEnabled)
 	require.True(t, resp.Data.WeChatOAuthOpenEnabled)
 	require.True(t, resp.Data.WeChatOAuthMPEnabled)
+}
+
+func TestSettingHandler_GetPublicSettings_HidesEndpointsFromAnonymous(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	repo := &settingHandlerPublicRepoStub{
+		values: map[string]string{
+			service.SettingKeyAPIBaseURL:      "https://api.example.com",
+			service.SettingKeyCustomEndpoints: `[{"name":"alt","endpoint":"https://alt.example.com","description":""}]`,
+		},
+	}
+	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "test-version")
+
+	type endpointsResp struct {
+		Code int `json:"code"`
+		Data struct {
+			APIBaseURL      string `json:"api_base_url"`
+			CustomEndpoints []struct {
+				Endpoint string `json:"endpoint"`
+			} `json:"custom_endpoints"`
+		} `json:"data"`
+	}
+	call := func(authed bool) endpointsResp {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+		if authed {
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+		}
+		h.GetPublicSettings(c)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		var resp endpointsResp
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+		require.Equal(t, 0, resp.Code)
+		return resp
+	}
+
+	anonymous := call(false)
+	require.Empty(t, anonymous.Data.APIBaseURL)
+	require.Empty(t, anonymous.Data.CustomEndpoints)
+
+	loggedIn := call(true)
+	require.Equal(t, "https://api.example.com", loggedIn.Data.APIBaseURL)
+	require.Len(t, loggedIn.Data.CustomEndpoints, 1)
+	require.Equal(t, "https://alt.example.com", loggedIn.Data.CustomEndpoints[0].Endpoint)
 }
