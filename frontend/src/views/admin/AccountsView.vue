@@ -695,6 +695,8 @@ const sortState = reactive<AccountSortState>(loadInitialAccountSortState())
 const showAutoRefreshDropdown = ref(false)
 const autoRefreshDropdownRef = ref<HTMLElement | null>(null)
 const AUTO_REFRESH_STORAGE_KEY = 'account-auto-refresh'
+// Deploy-only: 账号页默认筛选的分组 ID，构建时由 VITE_ACCOUNTS_DEFAULT_GROUP 指定；不设就是全部分组。
+const DEFAULT_ACCOUNT_GROUP_FILTER = (import.meta.env.VITE_ACCOUNTS_DEFAULT_GROUP as string | undefined) || ''
 const autoRefreshIntervals = [5, 10, 15, 30] as const
 const autoRefreshEnabled = ref(false)
 const autoRefreshIntervalSeconds = ref<(typeof autoRefreshIntervals)[number]>(30)
@@ -1089,7 +1091,7 @@ const {
     type: '',
     status: '',
     privacy_mode: '',
-    group: '',
+    group: DEFAULT_ACCOUNT_GROUP_FILTER,
     search: '',
     lite: '1',
     include_scheduler_score: shouldIncludeSchedulerScore() ? '1' : '0',
