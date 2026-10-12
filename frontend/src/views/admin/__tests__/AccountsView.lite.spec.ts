@@ -189,6 +189,20 @@ describe('admin AccountsView lite account list', () => {
     wrapper.unmount()
   })
 
+  it('opens filtered to the build-time default group, and to all groups without one', async () => {
+    const first = mountView()
+    await flushPromises()
+    expect(listAccounts).toHaveBeenLastCalledWith(1, 20, expect.objectContaining({ group: '' }), expect.anything())
+    first.unmount()
+
+    vi.stubEnv('VITE_ACCOUNTS_DEFAULT_GROUP', '5')
+    const second = mountView()
+    await flushPromises()
+    expect(listAccounts).toHaveBeenLastCalledWith(1, 20, expect.objectContaining({ group: '5' }), expect.anything())
+    second.unmount()
+    vi.unstubAllEnvs()
+  })
+
   it('maps group_ids through the group catalog for the table cell', async () => {
     const wrapper = mountView()
     await flushPromises()
