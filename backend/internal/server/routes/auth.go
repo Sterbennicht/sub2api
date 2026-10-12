@@ -17,6 +17,7 @@ func RegisterAuthRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	jwtAuth servermiddleware.JWTAuthMiddleware,
+	optionalJWT servermiddleware.OptionalJWTAuthMiddleware,
 	auditLog servermiddleware.AuditLogMiddleware,
 	redisClient *redis.Client,
 	settingService *service.SettingService,
@@ -243,7 +244,8 @@ func RegisterAuthRoutes(
 	settings := v1.Group("/settings")
 	settings.Use(panelRateLimiter.PublicIP())
 	{
-		settings.GET("/public", h.Setting.GetPublicSettings)
+		// 可选 JWT：匿名照常访问，带 token 时识别用户以返回端点地址。
+		settings.GET("/public", gin.HandlerFunc(optionalJWT), h.Setting.GetPublicSettings)
 		settings.GET("/email-unsubscribe", h.Setting.UnsubscribeNotificationEmail)
 	}
 
