@@ -220,4 +220,41 @@ describe('AccountTestModal', () => {
       mode: 'compact'
     })
   })
+
+  it('OpenAI tibo 测试会携带 tibo 测试模式', async () => {
+    getAvailableModels.mockResolvedValue([
+      { id: 'gpt-6.1-sol', display_name: 'GPT-6.1 Sol' }
+    ])
+    global.fetch = vi.fn().mockResolvedValue(
+      createStreamResponse([
+        'data: {"type":"test_complete","success":true}\n'
+      ])
+    ) as any
+
+    const wrapper = mountModal({
+      id: 42,
+      name: 'OpenAI API Key',
+      platform: 'openai',
+      type: 'apikey',
+      status: 'active'
+    })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    expect((wrapper.vm as any).openAITestModeOptions.map((o: any) => o.value)).toEqual([
+      'default',
+      'compact',
+      'tibo'
+    ])
+    ;(wrapper.vm as any).selectedModelId = 'gpt-6.1-sol'
+    ;(wrapper.vm as any).testMode = 'tibo'
+    await (wrapper.vm as any).startTest()
+    await flushPromises()
+
+    const [, request] = (global.fetch as any).mock.calls[0]
+    expect(JSON.parse(request.body)).toMatchObject({
+      model_id: 'gpt-6.1-sol',
+      mode: 'tibo'
+    })
+  })
 })

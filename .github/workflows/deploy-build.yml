@@ -8,6 +8,7 @@ name: deploy-build
 #   - upstream billing probe reads <account id>.json from UPSTREAM_BILLING_PROBE_EXTERNAL_DIR
 #     first, so non-sub2api upstreams get a rate too (deploy-only)
 #   - accounts page opens filtered to VITE_ACCOUNTS_DEFAULT_GROUP (deploy-only)
+#   - account test dialog has a tibo knowledge-probe mode for OpenAI accounts (deploy-only)
 # To move to a new upstream release: rebase deploy/main onto the release's
 # "sync VERSION" commit, drop the fixes that were merged upstream, force-push.
 
