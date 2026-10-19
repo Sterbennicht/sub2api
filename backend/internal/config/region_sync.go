@@ -57,7 +57,8 @@ type RegionSyncConfig struct {
 	DefaultOAuthRefreshOwner string `mapstructure:"default_oauth_refresh_owner"`
 	// LocalSettingKeys 只在本地区生效、不接收对端同步的 settings key。
 	LocalSettingKeys []string `mapstructure:"local_setting_keys"`
-	// ProxyURLOverrides 本地区对同步来的代理记录改用本地出口：{"代理ID": "http://127.0.0.1:7891"}。
+	// ProxyURLOverrides 本地区对同步来的代理记录改用本地出口：{"代理ID": "http://127.0.0.1:7891"}；
+	// 值为 "direct" 表示该代理在本地区直连。
 	ProxyURLOverrides map[string]string `mapstructure:"proxy_url_overrides"`
 }
 

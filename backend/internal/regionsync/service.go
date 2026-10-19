@@ -109,6 +109,9 @@ func (s *Service) Enabled() bool { return s != nil && s.cfg.Enabled }
 // Config 返回配置副本。
 func (s *Service) Config() config.RegionSyncConfig { return s.cfg }
 
+// ProxyOverrideDirect proxy_url_overrides 的特殊值：该代理在本地区改为直连。
+const ProxyOverrideDirect = "direct"
+
 // PublishIdentity 把地区身份写进进程全局（调度分池、OAuth 刷新 owner、代理覆盖）。
 func PublishIdentity(cfg config.RegionSyncConfig) {
 	if !cfg.Enabled {
@@ -118,9 +121,15 @@ func PublishIdentity(cfg config.RegionSyncConfig) {
 	overrides := map[int64]string{}
 	for k, v := range cfg.ProxyURLOverrides {
 		var id int64
-		if _, err := fmt.Sscan(strings.TrimSpace(k), &id); err == nil && id > 0 && strings.TrimSpace(v) != "" {
-			overrides[id] = strings.TrimSpace(v)
+		v = strings.TrimSpace(v)
+		if _, err := fmt.Sscan(strings.TrimSpace(k), &id); err != nil || id <= 0 || v == "" {
+			continue
 		}
+		if strings.EqualFold(v, ProxyOverrideDirect) {
+			// 本地区直连：代理 URL 为空，上游客户端不走代理。
+			v = ""
+		}
+		overrides[id] = v
 	}
 	region.Set(region.Identity{
 		Enabled:           true,

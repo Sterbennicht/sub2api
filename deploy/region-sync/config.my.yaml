@@ -11,8 +11,10 @@ region_sync:
   sender_enabled: true
   default_oauth_refresh_owner: gz
   # 同步来的代理记录在 MY 改用本地出口（GZ 的 127.0.0.1:789x 在 MY 不存在）：
+  # 值写本地代理地址，或 direct 表示在 MY 直连（海外上游从 MY 通常可直连）。
   # proxy_url_overrides:
-  #   "3": "http://127.0.0.1:7891"
+  #   "3": "direct"
+  #   "5": "http://127.0.0.1:7891"
   peer:
     region_id: gz
     url: https://192.0.2.10:8443

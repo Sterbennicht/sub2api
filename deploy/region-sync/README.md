@@ -114,7 +114,7 @@
 
 ## 残留依赖与已知缺口
 
-- **出口**：账号代理 `127.0.0.1:789x` 只在 GZ 有。MY 需要本地 mihomo，或用 `proxy_url_overrides` 改指向。
+- **出口**：账号代理 `127.0.0.1:789x` 只在 GZ 有。MY 需要本地 mihomo，或用 `proxy_url_overrides` 改指向本地代理；写 `direct` 表示该代理在 MY 直连。
   aihub.top、anyrouter、ai2api 从 GZ 直连不通（现在已经走代理）。各地区的出口要分别验证。
 - **MY → GZ 依赖**：只有管理写、注册、兑换、支付、第三方登录（转发）。GZ 挂了时 MY 的这些操作失败，其余照常。GZ 不依赖 MY（MY 断开时 GZ 只是暂时收不到 MY 的使用记录，恢复后补齐）。
 - **step-up**：授权存在各地区 Redis。如果开了 `step_up_enabled`，MY 转发到 GZ 的受保护写会失败（线上目前没开）。

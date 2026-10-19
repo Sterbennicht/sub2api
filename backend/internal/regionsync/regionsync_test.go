@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/region"
 	"github.com/stretchr/testify/require"
 )
@@ -154,4 +155,15 @@ func TestRegionGates(t *testing.T) {
 	u, ok := region.ProxyURLOverride(7)
 	require.True(t, ok)
 	require.Equal(t, "http://127.0.0.1:7891", u)
+
+	// 配置里写 direct：该代理在本地区直连（URL 为空）。
+	PublishIdentity(config.RegionSyncConfig{Enabled: true, RegionID: "my", PrimaryRegion: "gz",
+		ProxyURLOverrides: map[string]string{"3": "Direct", "5": "http://127.0.0.1:7892", "x": "direct", "9": " "}})
+	u, ok = region.ProxyURLOverride(3)
+	require.True(t, ok)
+	require.Empty(t, u)
+	u, _ = region.ProxyURLOverride(5)
+	require.Equal(t, "http://127.0.0.1:7892", u)
+	_, ok = region.ProxyURLOverride(9)
+	require.False(t, ok)
 }
