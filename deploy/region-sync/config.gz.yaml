@@ -4,7 +4,7 @@ region_sync:
   enabled: true
   region_id: gz
   primary_region: gz
-  usage_aggregation_region: my      # GZ 的使用记录发往 MY 汇总
+  usage_aggregation_region: gz      # 全局用量与账务总览在 GZ；MY 的使用记录单向发来
   sender_enabled: true              # 初始化基线期间先设 false
   default_oauth_refresh_owner: gz   # OAuth 账号默认由 GZ 刷新；单地区池的账号由该地区刷新
   peer:

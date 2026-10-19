@@ -6,13 +6,34 @@
 
 | | GZ（广州） | MY（马来西亚） |
 |---|---|---|
-| 角色 | 配置写主地区（`primary_region: gz`） | 管理入口；后台 GET 读本地，后台写反代到 GZ |
+| 角色 | 主节点：配置主写、管理后台（`primary_region: gz`） | 从节点；后台 GET 读本地，后台写转发到 GZ |
 | 模型请求 / 鉴权 / 扣费 | 本地库 + 本地 Redis | 本地库 + 本地 Redis |
 | 用户登录、个人设置、自助 Key | 本地 | 本地，异步同步，不依赖 GZ 在线 |
 | 注册、兑换、下单、第三方登录、支付回调 | 本地 | 转发到 GZ（GZ 不可达时返回 502 `REGION_PRIMARY_UNAVAILABLE`） |
-| 使用记录 | 发往 MY | 汇总地区（`usage_aggregation_region: my`） |
+| 使用记录 | 汇总地区（`usage_aggregation_region: gz`），全局用量与账务总览在这里 | 单向发往 GZ（来源 id 映射防重） |
 
+选 GZ 当主节点：不用搬主库、回滚简单；MY 只有 842MB 内存且是突发型实例；支付回调和邮件推送离 GZ 近。
 换成 MY 为主只改配置：两边 `primary_region: my`，GZ 设 `forward_primary_writes: true`。
+
+### 管理后台入口（sub2api.example.com）
+
+两种挂法，域名都不暴露大陆 IP：
+
+- **默认：MY 本地读 + 写转发**。`/api/v1/admin` 的 GET 由 MY 本地库返回（可能落后几秒），写由 MY 的 Sub2API 转发到 GZ。
+  断链时后台只读可用、写失败。
+- **整体反代**：MY 的 nginx 把 `/api/v1/admin`（以及后台页面所需的接口）直接 `proxy_pass` 到 GZ，后台数据永远是 GZ 的实时数据。
+  断链时 MY 侧后台整体不可用。
+  ```nginx
+  location /api/v1/admin/ {
+      proxy_pass https://192.0.2.10:8443;
+      proxy_ssl_verify off;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+  }
+  ```
+  后台前端页面是同一个 SPA，由 MY 本地返回即可，只有接口走 GZ。
+
+两种挂法下，断链都不影响用户中心（登录、个人设置、自助 Key、passkey）和模型请求。
 
 请求路径上没有任何跨区调用。跨区只有后台 worker：
 `POST /internal/region-sync/v1/events`、`/reconcile`，以及 `GET /status`（仅本机或带签名）。
@@ -89,13 +110,13 @@
 - 软回滚：`region_sync.enabled: false` 后重启，触发器立即变成空操作，单节点行为恢复。
 - 换回旧二进制前，先执行 `UPDATE region_sync_local SET enabled = FALSE, ship_usage = FALSE;`，否则旧二进制下 outbox 会一直增长。
 - 彻底移除：先确认两地积压为 0，再执行 `rollback.sql`。它会删除触发器、函数和表，把序列步长恢复为 1，并删掉迁移 246 的记录。
-- MY 回到「中继到 GZ」：nginx 改回原配置即可，GZ 数据始终完整。MY 本地产生的变更以 GZ 收到的为准。
+- MY 回到「中继到 GZ」：关掉 MY 侧 Sub2API，入口（nginx）切回中继 GZ 即可，不用反向搬数据。GZ 是主库，数据始终完整；MY 断开前未发出的本地变更（多为用户自助改动和本地扣费）以 GZ 已收到的为准，切换前先看 `region-sync status` 让 MY 积压降到 0。
 
 ## 残留依赖与已知缺口
 
 - **出口**：账号代理 `127.0.0.1:789x` 只在 GZ 有。MY 需要本地 mihomo，或用 `proxy_url_overrides` 改指向。
   aihub.top、anyrouter、ai2api 从 GZ 直连不通（现在已经走代理）。各地区的出口要分别验证。
-- **MY → GZ 依赖**：只有管理写、注册、兑换、支付、第三方登录（转发）。GZ 挂了时 MY 的这些操作失败，其余照常。GZ 不依赖 MY。
+- **MY → GZ 依赖**：只有管理写、注册、兑换、支付、第三方登录（转发）。GZ 挂了时 MY 的这些操作失败，其余照常。GZ 不依赖 MY（MY 断开时 GZ 只是暂时收不到 MY 的使用记录，恢复后补齐）。
 - **step-up**：授权存在各地区 Redis。如果开了 `step_up_enabled`，MY 转发到 GZ 的受保护写会失败（线上目前没开）。
   插件、备份、数据管理、运维等写操作留在 MY 本地执行（`local_admin_write_prefixes`）。
 - **不同步的表**：user_avatars、auth_identities（登录时在本地回填）。

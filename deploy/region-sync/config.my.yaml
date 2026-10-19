@@ -1,9 +1,10 @@
-# 马来西亚（MY）：管理入口。后台读本地，写转发到 GZ；用户登录/个人设置/自助 Key 本地完成。
+# 马来西亚（MY）：从节点。后台读本地、写转发到 GZ（或由 nginx 整体反代到 GZ，见 README）；
+# 用户登录/个人设置/自助 Key/passkey 本地完成。
 region_sync:
   enabled: true
   region_id: my
   primary_region: gz
-  usage_aggregation_region: my      # 全局用量在 MY 看
+  usage_aggregation_region: gz      # 本地使用记录单向发往 GZ 汇总
   forward_primary_writes: true
   primary_forward_url: https://192.0.2.10:8443
   primary_forward_insecure_skip_verify: true
