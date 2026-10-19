@@ -36,7 +36,7 @@
 两种挂法下，断链都不影响用户中心（登录、个人设置、自助 Key、passkey）和模型请求。
 
 请求路径上没有任何跨区调用。跨区只有后台 worker：
-`POST /internal/region-sync/v1/events`、`/reconcile`，以及 `GET /status`（仅本机或带签名）。
+`POST /internal/region-sync/v1/events`、`/reconcile`，以及 `GET /status`（同样要签名）。
 认证为 HMAC-SHA256，签名覆盖来源、时间戳、方法、路径和 body 摘要，允许 5 分钟时钟偏差。
 
 ## 数据规则
@@ -93,7 +93,7 @@
 
 ## 监控
 
-- `curl -s http://127.0.0.1:<port>/internal/region-sync/v1/status`（仅本机）或 `sub2api region-sync status`：查看各流积压、最老事件年龄、暂存、拒绝、待失效缓存。
+- 在服务器上运行 `sudo -u sub2api /opt/sub2api/sub2api region-sync status`（在 /opt/sub2api 目录下）：查看各流积压、最老事件年龄、暂存、拒绝、待失效缓存。
 - 日志关键词：`region_sync_backlog_alert`（积压超过 300s）、`region_sync_send_failed`、`region_sync_event_rejected*`、`region_sync_attention`。
 - 被拒绝的事件仍会确认，原始负载存进 `region_sync_deferred(kind='rejected')`。修好原因后执行 `sub2api region-sync replay-rejected --execute`。
 

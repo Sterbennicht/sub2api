@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -120,12 +119,11 @@ func (s *Service) handleReconcileHTTP(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// handleStatus 只允许本机直连（不看转发头）或带签名的请求访问。
+// handleStatus 只接受带签名的请求。服务通常在 nginx 后面，来源地址恒为 127.0.0.1，
+// 不能按回环地址放行；本机查看用 sub2api region-sync status。
 func (s *Service) handleStatus(c *gin.Context) {
-	if !isLoopback(c.Request.RemoteAddr) {
-		if _, ok := s.readSigned(c); !ok {
-			return
-		}
+	if _, ok := s.readSigned(c); !ok {
+		return
 	}
 	st, err := s.Status(c.Request.Context())
 	if err != nil {
@@ -133,15 +131,6 @@ func (s *Service) handleStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, st)
-}
-
-func isLoopback(remoteAddr string) bool {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		host = remoteAddr
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 // ---------------------------------------------------------------------------
