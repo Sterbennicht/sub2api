@@ -1,0 +1,19 @@
+# 马来西亚（MY）：管理入口。后台读本地，写转发到 GZ；用户登录/个人设置/自助 Key 本地完成。
+region_sync:
+  enabled: true
+  region_id: my
+  primary_region: gz
+  usage_aggregation_region: my      # 全局用量在 MY 看
+  forward_primary_writes: true
+  primary_forward_url: https://192.0.2.10:8443
+  primary_forward_insecure_skip_verify: true
+  sender_enabled: true
+  default_oauth_refresh_owner: gz
+  # 同步来的代理记录在 MY 改用本地出口（GZ 的 127.0.0.1:789x 在 MY 不存在）：
+  # proxy_url_overrides:
+  #   "3": "http://127.0.0.1:7891"
+  peer:
+    region_id: gz
+    url: https://192.0.2.10:8443
+    insecure_skip_verify: true
+    timeout_seconds: 15

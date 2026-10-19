@@ -42,6 +42,10 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		}
 	}()
 
+	if err := tagRegionSyncReason(ctx, tx, regionSyncReasonUsage, cmd.RequestID); err != nil {
+		return nil, err
+	}
+
 	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
 	if err != nil {
 		return nil, err
@@ -146,6 +150,11 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 			_ = tx.Rollback()
 		}
 	}()
+
+	// 冻结/结算/释放属于资金变动，走高优先级同步流。
+	if err := tagRegionSyncReason(ctx, tx, regionSyncReasonHold, cmd.RequestID); err != nil {
+		return nil, err
+	}
 
 	applied, err := r.claimUsageBillingRequest(ctx, tx, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint)
 	if err != nil {

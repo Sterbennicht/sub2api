@@ -1,0 +1,15 @@
+# 广州（GZ）：配置写主地区。只列 region_sync 段，其余配置照旧。
+# 两地 jwt.secret 必须相同（管理员/用户令牌两地通用）。
+region_sync:
+  enabled: true
+  region_id: gz
+  primary_region: gz
+  usage_aggregation_region: my      # GZ 的使用记录发往 MY 汇总
+  sender_enabled: true              # 初始化基线期间先设 false
+  default_oauth_refresh_owner: gz   # OAuth 账号默认由 GZ 刷新；单地区池的账号由该地区刷新
+  peer:
+    region_id: my
+    url: https://192.0.2.20:8443
+    insecure_skip_verify: true      # 对端是 IP 证书；请求另有 HMAC
+    # shared_secret 用环境变量 REGION_SYNC_PEER_SHARED_SECRET 注入（两端相同，≥32 字符）
+    timeout_seconds: 15

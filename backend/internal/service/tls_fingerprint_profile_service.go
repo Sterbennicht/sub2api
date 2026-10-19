@@ -257,3 +257,8 @@ func (s *TLSFingerprintProfileService) invalidateAndNotify(ctx context.Context) 
 		}
 	}
 }
+
+// ReloadFromStore 在模板被进程外写入（如地区同步落库）后重建缓存并通知其他实例。
+func (s *TLSFingerprintProfileService) ReloadFromStore(ctx context.Context) {
+	s.invalidateAndNotify(ctx)
+}

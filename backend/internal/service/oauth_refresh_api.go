@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/region"
 )
 
 // OAuthRefreshExecutor 各平台实现的 OAuth 刷新执行器
@@ -243,6 +245,13 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 		if requestPath {
 			return nil, fmt.Errorf("%w: account is no longer refreshable", errOAuthRefreshAccountStateChanged)
 		}
+		return &OAuthRefreshResult{Account: freshAccount}, nil
+	}
+
+	// 2.5 多地区：只有刷新 owner 所在地区才能换 token，避免两地同时用同一个
+	// refresh_token（轮换后一方必然失效）。非 owner 直接用库里最新凭据，
+	// owner 刷新后的凭据会经地区同步写进本地库。
+	if !region.IsRefreshOwner(freshAccount.Extra) {
 		return &OAuthRefreshResult{Account: freshAccount}, nil
 	}
 

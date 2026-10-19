@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/region"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
@@ -190,6 +191,10 @@ func (a *Account) EffectiveLoadFactor() int {
 
 func (a *Account) IsSchedulable() bool {
 	if !a.IsActive() || !a.Schedulable {
+		return false
+	}
+	// 多地区部署时按 extra.region_pool 分池；单节点恒为 true。
+	if !region.AccountAllowedHere(a.Extra) {
 		return false
 	}
 	now := time.Now()

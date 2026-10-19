@@ -385,3 +385,8 @@ func (s *ErrorPassthroughService) containsAnyKeywordCached(bodyLower string, low
 	}
 	return false
 }
+
+// ReloadFromStore 在规则被进程外写入（如地区同步落库）后重建缓存并通知其他实例。
+func (s *ErrorPassthroughService) ReloadFromStore(ctx context.Context) {
+	s.invalidateAndNotify(ctx)
+}

@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/region"
 )
 
 const (
@@ -40,6 +42,9 @@ func (p *Proxy) IsExpired(now time.Time) bool {
 }
 
 func (p *Proxy) URL() string {
+	if override, ok := region.ProxyURLOverride(p.ID); ok {
+		return override
+	}
 	u := &url.URL{
 		Scheme: p.Protocol,
 		Host:   net.JoinHostPort(p.Host, strconv.Itoa(p.Port)),

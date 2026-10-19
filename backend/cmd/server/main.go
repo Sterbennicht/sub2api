@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/regionsync"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
@@ -55,6 +56,13 @@ func init() {
 func main() {
 	logger.InitBootstrap()
 	defer logger.Sync()
+
+	// 多地区运维子命令：sub2api region-sync <cmd>
+	if len(os.Args) > 1 && os.Args[1] == regionsync.CLIName {
+		code := regionsync.RunCLI(os.Args[2:], os.Stdout, os.Stderr)
+		logger.Sync()
+		os.Exit(code)
+	}
 
 	// Parse command line flags
 	setupMode := flag.Bool("setup", false, "Run setup wizard in CLI mode")
